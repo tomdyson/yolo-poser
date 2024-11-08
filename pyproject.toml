@@ -1,0 +1,39 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "yolo-poser"
+authors = [{name = "[Tom Dyson]"}]
+dynamic = ["version"]
+description = "YOLO-based human pose detection and visualization tool"
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.8,<3.13"
+dependencies = [
+    "torch>=2.0.0",
+    "ultralytics>=8.0.0",
+    "opencv-python>=4.5.0",
+    "numpy>=1.19.0",
+]
+
+[project.urls]
+Home = "https://github.com/tomdyson/yolo-poser"
+Documentation = "https://github.com/tomdyson/yolo-poser#readme"
+Source = "https://github.com/tomdyson/yolo-poser"
+
+[project.scripts]
+yolo-poser = "yolo_poser.pose_detect:main"
