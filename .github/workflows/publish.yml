@@ -30,4 +30,3 @@ jobs:
           FLIT_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: flit publish
         
-      - name: Build and publish to TestPyPI
