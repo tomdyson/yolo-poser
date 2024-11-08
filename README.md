@@ -27,6 +27,39 @@ process_video(
 )
 ```
 
+### Web API
+
+To use the HTTP API, first install with API dependencies:
+
+```bash
+pip install "yolo-poser[api]"
+```
+
+Start the API server:
+```bash
+yolo-poser-api [--host HOST] [--port PORT]
+```
+
+For example:
+```bash
+yolo-poser-api --host 127.0.0.1 --port 9000
+```
+
+Or programmatically:
+```python
+from yolo_poser.api import app
+import uvicorn
+
+uvicorn.run(app, host="127.0.0.1", port=9000)
+```
+
+The API provides endpoints for:
+- Processing videos from URLs: POST /detect/url
+- Processing uploaded video files: POST /detect/file
+- Health check: GET /health
+
+See the API documentation at http://localhost:8000/docs when running the server.
+
 ## Features
 
 - Human pose detection using YOLO

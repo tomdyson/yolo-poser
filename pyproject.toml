@@ -30,6 +30,14 @@ dependencies = [
     "numpy>=1.19.0",
 ]
 
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.68.0",
+    "uvicorn>=0.15.0",
+    "python-multipart>=0.0.5",  # For handling file uploads
+    "pydantic>=1.8.0",
+]
+
 [project.urls]
 Home = "https://github.com/tomdyson/yolo-poser"
 Documentation = "https://github.com/tomdyson/yolo-poser#readme"
@@ -37,3 +45,4 @@ Source = "https://github.com/tomdyson/yolo-poser"
 
 [project.scripts]
 yolo-poser = "yolo_poser.pose_detect:main"
+yolo-poser-api = "yolo_poser.api:main"  # Add the API command
