@@ -1,6 +1,6 @@
 """YOLO-based human pose detection and visualization tool."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 from .pose_detect import process_video, process_video_frames
 
