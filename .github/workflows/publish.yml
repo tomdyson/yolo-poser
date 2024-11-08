@@ -31,9 +31,3 @@ jobs:
         run: flit publish
         
       - name: Build and publish to TestPyPI
-        if: github.ref == 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v')
-        env:
-          FLIT_INDEX_URL: https://test.pypi.org/legacy/
-          FLIT_USERNAME: __token__
-          FLIT_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
-        run: flit publish 
