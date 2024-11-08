@@ -57,7 +57,6 @@ Output Formats
 
 import argparse
 import os
-import subprocess
 import time
 from collections import defaultdict
 from contextlib import contextmanager
@@ -66,8 +65,12 @@ from typing import Generator, Optional, Union
 
 import cv2
 import numpy as np
-import torch
-from ultralytics import YOLO
+
+# Change relative import to absolute for command line usage
+try:
+    from .utils import FFmpegWriter, get_device, load_yolo_model
+except ImportError:
+    from utils import FFmpegWriter, get_device, load_yolo_model
 
 # Detection and smoothing thresholds
 CONFIDENCE_THRESHOLD = 0.3
@@ -114,14 +117,6 @@ def timer(stats: TimingStats, operation: str):
     yield
     duration = time.perf_counter() - start
     stats.add_timing(operation, duration)
-
-def get_device() -> torch.device:
-    """Get the best available device for PyTorch."""
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
 
 # Output format configurations
 OUTPUT_FORMATS = {
@@ -185,7 +180,7 @@ def get_default_output_path(input_path: str, output_format: str = 'mjpeg') -> st
     return str(input_path.parent / f"{input_path.stem}_pose_detected{ext}")
 
 def process_video_frames(
-    model: YOLO,
+    model,
     input_path: str,
     debug: bool = False
 ) -> Generator[tuple[cv2.Mat, dict], None, None]:
@@ -333,67 +328,6 @@ def process_video_frames(
         yield frame, frame_data
         frame_idx += 1
 
-class FFmpegWriter:
-    def __init__(self, output_path: str, width: int, height: int, fps: float):
-        if output_path.endswith('.webm'):
-            # WebM-specific FFmpeg command with VP9 codec
-            command = [
-                'ffmpeg',
-                '-y',
-                '-f', 'rawvideo',
-                '-vcodec', 'rawvideo',
-                '-s', f'{width}x{height}',
-                '-pix_fmt', 'bgr24',
-                '-r', str(fps),
-                '-i', '-',
-                '-an',
-                '-c:v', 'libvpx-vp9',  # Use VP9 codec
-                '-b:v', '2M',          # Target bitrate
-                '-deadline', 'realtime',# Faster encoding
-                '-cpu-used', '4',      # Speed/quality tradeoff (0-8, higher = faster)
-                '-pix_fmt', 'yuv420p',
-                '-f', 'webm',
-                '-loglevel', 'error',
-                output_path
-            ]
-        else:
-            # Existing H.264 command
-            command = [
-                'ffmpeg',
-                '-y',
-                '-f', 'rawvideo',
-                '-vcodec', 'rawvideo',
-                '-s', f'{width}x{height}',
-                '-pix_fmt', 'bgr24',
-                '-r', str(fps),
-                '-i', '-',
-                '-an',
-                '-c:v', 'libx264',
-                '-preset', 'fast',
-                '-crf', '23',
-                '-profile:v', 'high',
-                '-level:v', '4.0',
-                '-pix_fmt', 'yuv420p',
-                '-movflags', '+faststart',
-                '-f', 'mp4',
-                '-loglevel', 'error',
-                output_path
-            ]
-        
-        # Redirect stderr to /dev/null to suppress remaining output
-        self.process = subprocess.Popen(
-            command, 
-            stdin=subprocess.PIPE,
-            stderr=subprocess.DEVNULL
-        )
-        
-    def write(self, frame):
-        self.process.stdin.write(frame.tobytes())
-        
-    def release(self):
-        self.process.stdin.close()
-        self.process.wait(timeout=5)
-
 def create_video_writer(
     input_path: str, 
     output_path: str, 
@@ -423,29 +357,22 @@ def create_video_writer(
 
 def process_video(
     input_path: str,
-    model_path: str = None,  # Changed default to None
+    model_path: str = None,
     output_path: Optional[str] = None,
     output_format: str = 'mjpeg',
     debug: bool = False
 ) -> None:
-    
-    if model_path is None:
-        # Use the default model from the package
-        model_path = "yolo11n-pose.pt"
-        if not os.path.exists(model_path):
-            print("Downloading YOLO model...")
-            model = YOLO("yolo11n-pose.pt")  # This will download the model if it doesn't exist
-    else:
-        model = YOLO(model_path)
-            
+    """Process video with pose detection."""
     if debug:
         total_start = time.perf_counter()
         print("\nStarting video processing...")
         model_start = time.perf_counter()
     
+    model = load_yolo_model(model_path)  # Use shared model loading
+            
     if debug:
         model_time = time.perf_counter() - model_start
-        print(f"Model {model_path} loading time: {model_time:.2f}s")
+        print(f"Model loading time: {model_time:.2f}s")
         writer_start = time.perf_counter()
     
     output_path = output_path or get_default_output_path(input_path, output_format)
