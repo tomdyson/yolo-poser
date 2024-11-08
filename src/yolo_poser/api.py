@@ -53,7 +53,7 @@ async def detect_from_url(input_data: URLInput):
             input_path=str(input_path),
             output_path=str(output_path),
             output_format=input_data.output_format,
-            model=input_data.model
+            model_path=input_data.model_path
         )
         
         # Clean up input file
@@ -105,7 +105,7 @@ async def detect_from_file(
             input_path=str(input_path),
             output_path=str(output_path),
             output_format=output_format,
-            model=model
+            model_path=model
         )
         
         # Clean up input file
