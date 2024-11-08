@@ -43,6 +43,40 @@ process_video(
 - OpenCV
 - NumPy
 
+## Development
+
+### Continuous Integration
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+- Every push to the `main` branch triggers a test build that publishes to TestPyPI
+- Tagged releases (e.g. `v0.1.0`) trigger a build that publishes to PyPI
+
+To release a new version:
+
+1. Update the version in `src/yolo_poser/__init__.py`
+2. Commit the changes
+3. Create and push a tag:
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The GitHub Action will automatically build and publish the new version to PyPI.
+
+### Local Development
+
+1. Clone the repository:
+```bash
+git clone https://github.com/tomdyson/yolo-poser.git
+cd yolo-poser
+```
+
+2. Install in development mode:
+```bash
+pip install -e .
+```
+
 ## License
 
 MIT License
