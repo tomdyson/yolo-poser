@@ -245,8 +245,29 @@ def crop_video(input_path, output_path, crop_params):
     cap.release()
     writer.release()
 
-def main(input_video, padding=0.1, keep_proportions=True, preview=True, debug=False):
+def main(input_video=None):
     """Main function with configurable options"""
+    if input_video is None:
+        # Set up argument parser
+        parser = argparse.ArgumentParser(description='Auto-crop video based on person detection')
+        parser.add_argument('input_video', help='Path to input video')
+        parser.add_argument('--padding', type=float, default=0.3, help='Padding around detected area (default: 0.3)')
+        parser.add_argument('--no-keep-proportions', action='store_false', dest='keep_proportions',
+                          help='Do not maintain original video proportions')
+        parser.add_argument('--no-preview', action='store_false', dest='preview',
+                          help='Skip preview and confirmation')
+        parser.add_argument('--debug', action='store_true', help='Save debug frames showing detections')
+        
+        args = parser.parse_args()
+        
+        return main(
+            args.input_video,
+            padding=args.padding,
+            keep_proportions=args.keep_proportions,
+            preview=args.preview,
+            debug=args.debug
+        )
+    
     # Get bounding box and sample frames
     bbox, valid_frames = get_combined_bbox(input_video, debug=debug)
     
@@ -289,21 +310,4 @@ def main(input_video, padding=0.1, keep_proportions=True, preview=True, debug=Fa
     print(f"Cropped video saved as: {output_video}")
 
 if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Auto-crop video based on person detection')
-    parser.add_argument('input_video', help='Path to input video')
-    parser.add_argument('--padding', type=float, default=0.3, help='Padding around detected area (default: 0.1)')
-    parser.add_argument('--no-keep-proportions', action='store_false', dest='keep_proportions',
-                        help='Do not maintain original video proportions')
-    parser.add_argument('--no-preview', action='store_false', dest='preview',
-                        help='Skip preview and confirmation')
-    parser.add_argument('--debug', action='store_true', help='Save debug frames showing detections')
-    
-    args = parser.parse_args()
-    
-    main(args.input_video, 
-         padding=args.padding,
-         keep_proportions=args.keep_proportions,
-         preview=args.preview,
-         debug=args.debug)
+    main()
