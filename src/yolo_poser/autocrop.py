@@ -1,3 +1,4 @@
+import argparse
 import subprocess
 import time
 from pathlib import Path
@@ -230,22 +231,28 @@ def visualize_crop(frame, crop_params, output_path=None):
 def crop_video(input_path, output_path, crop_params):
     """Apply the crop using ffmpeg"""
     x, y, w, h = crop_params
-    writer = FFmpegWriter(output_path, w, h, None)
     
+    # Get input video FPS
     cap = cv2.VideoCapture(input_path)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    frame_indices = np.linspace(0, total_frames-1, total_frames, dtype=int)
+    fps = cap.get(cv2.CAP_PROP_FPS)
     
-    for idx in frame_indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-        ret, frame = cap.read()
-        if ret:
-            writer.write(frame)
+    # Create writer with cropped dimensions and correct FPS
+    writer = FFmpegWriter(output_path, w, h, fps)
     
-    cap.release()
-    writer.release()
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            # Crop the frame before writing
+            cropped_frame = frame[y:y+h, x:x+w]
+            writer.write(cropped_frame)
+    finally:
+        cap.release()
+        writer.release()
 
-def main(input_video=None):
+def main(input_video=None, padding=0.3, keep_proportions=True, preview=True, debug=False):
     """Main function with configurable options"""
     if input_video is None:
         # Set up argument parser
@@ -261,7 +268,7 @@ def main(input_video=None):
         args = parser.parse_args()
         
         return main(
-            args.input_video,
+            input_video=args.input_video,
             padding=args.padding,
             keep_proportions=args.keep_proportions,
             preview=args.preview,
