@@ -8,6 +8,9 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+      
     steps:
       - uses: actions/checkout@v4
       
@@ -23,6 +26,9 @@ jobs:
           
       - name: Build and publish to PyPI
         env:
-          FLIT_USERNAME: __token__
-          FLIT_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: flit publish 
+          FLIT_INDEX_URL: https://upload.pypi.org/legacy/
+        run: |
+          echo "[pypi]" > ~/.pypirc
+          echo "username = __token__" >> ~/.pypirc
+          echo "password = ${{ secrets.PYPI_TOKEN }}" >> ~/.pypirc
+          flit publish
