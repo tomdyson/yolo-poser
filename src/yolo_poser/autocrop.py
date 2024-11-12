@@ -239,7 +239,7 @@ def visualize_crop(frame, crop_params, output_path=None):
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-def crop_video(input_path, output_path, crop_params):
+def crop_video(input_path, output_path, crop_params, debug=False):
     """Apply the crop using ffmpeg"""
     x, y, w, h = crop_params
     
@@ -247,57 +247,31 @@ def crop_video(input_path, output_path, crop_params):
     w = w - (w % 2)
     h = h - (h % 2)
     
-    # Get input video FPS and total frames
-    cap = cv2.VideoCapture(input_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # Construct FFmpeg command to crop video while preserving audio
+    ffmpeg_cmd = [
+        'ffmpeg', '-y',
+        '-i', str(input_path),
+        '-vf', f'crop={w}:{h}:{x}:{y}',
+        '-c:a', 'copy',  # Copy audio stream without re-encoding
+        '-pix_fmt', 'yuv420p',  # Ensure QuickTime compatibility
+        str(output_path)
+    ]
     
-    # Create writer with cropped dimensions and correct FPS
-    writer = None
     try:
-        print(f"\nInitializing video writer ({w}x{h} @ {fps}fps)...")
-        writer = FFmpegWriter(output_path, w, h, fps)
+        print(f"\nCropping video with dimensions {w}x{h}...")
+        if debug:
+            print(f"FFmpeg command: {' '.join(ffmpeg_cmd)}")
+            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+            print("\nFFmpeg output:")
+            print(result.stderr)  # FFmpeg writes its progress to stderr
+        else:
+            subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
+            
+        print("\nCropping completed successfully")
         
-        frame_count = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            frame_count += 1
-            if frame_count % 100 == 0:
-                progress = (frame_count / total_frames) * 100
-                print(f"\rCropping: {progress:.1f}% complete ({frame_count}/{total_frames} frames)", end="")
-            
-            # Ensure crop dimensions are within frame bounds
-            crop_h = min(h, frame.shape[0] - y)
-            crop_w = min(w, frame.shape[1] - x)
-            
-            if crop_h <= 0 or crop_w <= 0:
-                raise ValueError(f"Invalid crop dimensions at frame {frame_count}")
-            
-            try:
-                cropped_frame = frame[y:y+crop_h, x:x+crop_w]
-                # Ensure the cropped frame matches the writer's dimensions
-                if cropped_frame.shape[:2] != (h, w):
-                    cropped_frame = cv2.resize(cropped_frame, (w, h))
-                writer.write(cropped_frame)
-            except Exception as e:
-                print(f"\nError at frame {frame_count}/{total_frames}: {str(e)}")
-                raise
-                
-    except Exception as e:
-        print(f"\nError during video cropping: {str(e)}")
+    except subprocess.CalledProcessError as e:
+        print(f"\nError during video cropping: {e.stderr.decode()}")
         raise
-    
-    finally:
-        print("\nCleaning up resources...")
-        cap.release()
-        if writer:
-            try:
-                writer.release()
-            except Exception as e:
-                print(f"Error during writer cleanup: {str(e)}")
 
 def main(input_video=None, padding=0.3, keep_proportions=True, preview=True, debug=False, output=None):
     """Main function with configurable options"""
@@ -305,7 +279,7 @@ def main(input_video=None, padding=0.3, keep_proportions=True, preview=True, deb
         # Set up argument parser
         parser = argparse.ArgumentParser(description='Auto-crop video based on person detection')
         parser.add_argument('input_video', help='Path to input video')
-        parser.add_argument('--padding', type=float, default=0.3, help='Padding around detected area (default: 0.3)')
+        parser.add_argument('--padding', type=float, default=0.5, help='Padding around detected area (default: 0.5)')
         parser.add_argument('--no-keep-proportions', action='store_false', dest='keep_proportions',
                           help='Do not maintain original video proportions')
         parser.add_argument('--no-preview', action='store_false', dest='preview',
@@ -363,7 +337,7 @@ def main(input_video=None, padding=0.3, keep_proportions=True, preview=True, deb
     # Apply crop
     if output is None:
         output = f"{Path(input_video).stem}_cropped{Path(input_video).suffix}"
-    crop_video(input_video, output, crop_params)
+    crop_video(input_video, output, crop_params, debug)
     print(f"Cropped video saved as: {output}")
 
 if __name__ == "__main__":
