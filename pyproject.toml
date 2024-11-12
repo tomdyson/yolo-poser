@@ -28,6 +28,7 @@ dependencies = [
     "ultralytics>=8.0.0",
     "opencv-python>=4.5.0",
     "numpy>=1.19.0",
+    "scipy>=1.7.0",
 ]
 
 [project.optional-dependencies]
@@ -47,3 +48,4 @@ Source = "https://github.com/tomdyson/yolo-poser"
 yolo-poser = "yolo_poser.pose_detect:main"
 yolo-poser-api = "yolo_poser.api:main"
 yolo-crop = "yolo_poser.autocrop:main"
+yolo-split = "yolo_poser.split:main"
