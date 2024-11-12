@@ -66,18 +66,8 @@ from typing import Generator, Optional, Union
 
 import cv2
 import numpy as np
-
-# Change relative import to absolute for command line usage
-try:
-    from .utils import FFmpegWriter, get_device, load_yolo_model
-except ImportError:
-    from utils import FFmpegWriter, get_device, load_yolo_model
-
-# Add to imports at top
-try:
-    from .sync_audio import sync_audio
-except ImportError:
-    from sync_audio import sync_audio
+from sync_audio import sync_audio
+from utils import FFmpegWriter, get_device, load_yolo_model
 
 # Detection and smoothing thresholds
 CONFIDENCE_THRESHOLD = 0.3
@@ -391,7 +381,8 @@ def process_video(
     # Create temporary output path for video without audio
     temp_output = output_path or get_default_output_path(input_path, output_format)
     if not skip_audio and os.path.exists(input_path):
-        temp_output = temp_output.replace('.', '_temp.')
+        base, ext = os.path.splitext(temp_output)
+        temp_output = f"{base}_temp{ext}"
     
     writer = create_video_writer(input_path, temp_output, output_format)
     
@@ -421,7 +412,8 @@ def process_video(
             print("\nSyncing audio...")
         try:
             sync_audio(input_path, temp_output, final_output)
-            os.remove(temp_output)  # Clean up temporary file
+            if temp_output != final_output:  # Only delete if paths are different
+                os.remove(temp_output)  # Clean up temporary file
         except Exception as e:
             print(f"Warning: Audio sync failed: {str(e)}")
             print("Keeping video without audio")
