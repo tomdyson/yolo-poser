@@ -66,8 +66,9 @@ from typing import Generator, Optional, Union
 
 import cv2
 import numpy as np
-from sync_audio import sync_audio
-from utils import FFmpegWriter, get_device, load_yolo_model
+
+from .sync_audio import sync_audio
+from .utils import FFmpegWriter, get_device, load_yolo_model
 
 # Detection and smoothing thresholds
 CONFIDENCE_THRESHOLD = 0.3
@@ -458,5 +459,5 @@ def main():
         skip_audio=args.skip_audio
     )
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main() 

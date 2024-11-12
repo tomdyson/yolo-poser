@@ -2,7 +2,7 @@
 import argparse
 import subprocess
 
-from utils import FFmpegTools
+from .utils import FFmpegTools
 
 
 def sync_audio(source_video, destination_video, output_path=None):

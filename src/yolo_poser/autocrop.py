@@ -7,7 +7,8 @@ import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
-from utils import FFmpegWriter, get_device, load_yolo_model
+
+from .utils import FFmpegWriter, get_device, load_yolo_model
 
 
 def calculate_crop_params(video_path, bbox, padding=0.1, keep_proportions=True):
