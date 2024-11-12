@@ -46,4 +46,4 @@ Source = "https://github.com/tomdyson/yolo-poser"
 [project.scripts]
 yolo-poser = "yolo_poser.pose_detect:main"
 yolo-poser-api = "yolo_poser.api:main"
-yolo-crop = "yolo_poser.autocrop:main"  # Add the new command
+yolo-crop = "yolo_poser.autocrop:main"

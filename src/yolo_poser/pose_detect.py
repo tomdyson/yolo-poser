@@ -15,10 +15,11 @@ Dependencies
 - opencv-python (cv2): Video processing and visualization
 - numpy: Numerical operations
 - subprocess: For managing FFmpeg subprocess
+- sync_audio: For audio syncing
 
 Installation
 -----------
-pip install torch ultralytics opencv-python numpy
+pip install torch ultralytics opencv-python numpy sync_audio
 
 Usage
 -----
@@ -28,8 +29,8 @@ Basic video processing:
 Arguments:
     input             Input video file path
     --model          Path to YOLO model (default: yolo11n-pose.pt)
-    --output         Output video path (default: input_pose_detected.[avi/mp4/webm])
-    --output-format  Output video format: 'mjpeg' or 'h264' or 'webm' (default: mjpeg)
+    --output         Output video path (default: input_pose_detected.mp4)
+    --output-format  Output video format: 'mjpeg' or 'h264' or 'webm' (default: h264)
     --debug          Output timing information
 
 Example:
@@ -50,9 +51,9 @@ Visualization Features
 
 Output Formats
 ------------
-- MJPEG (.avi): Default format, widely compatible
-- H.264 (.mp4): More efficient compression, requires FFmpeg
-- WebM (.webm): More efficient compression, requires FFmpeg
+- H.264 (.mp4): Default format, efficient compression using FFmpeg
+- MJPEG (.avi): Alternative format for compatibility
+- WebM (.webm): Alternative format using VP9 codec
 """
 
 import argparse
@@ -71,6 +72,12 @@ try:
     from .utils import FFmpegWriter, get_device, load_yolo_model
 except ImportError:
     from utils import FFmpegWriter, get_device, load_yolo_model
+
+# Add to imports at top
+try:
+    from .sync_audio import sync_audio
+except ImportError:
+    from sync_audio import sync_audio
 
 # Detection and smoothing thresholds
 CONFIDENCE_THRESHOLD = 0.3
@@ -173,7 +180,7 @@ POINT_COLORS = {
 LINE_COLORS = {conn: color[:3] for (conn, color) in POSE_CONNECTIONS}
 POINT_COLORS_RGB = {k: v[:3] for k, v in POINT_COLORS.items()}
 
-def get_default_output_path(input_path: str, output_format: str = 'mjpeg') -> str:
+def get_default_output_path(input_path: str, output_format: str = 'h264') -> str:
     """Generate default output path with appropriate extension based on format."""
     input_path = Path(input_path)
     ext = OUTPUT_FORMATS[output_format]['ext']
@@ -340,43 +347,53 @@ def create_video_writer(
     fps = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
     
-    if output_format in ['h264', 'webm']:
+    # Always use FFmpegWriter for MOV files or when output format is h264/webm
+    if output_format in ['h264', 'webm'] or input_path.lower().endswith('.mov'):
         return FFmpegWriter(output_path, width, height, fps)
-    else:
-        # Existing MJPEG writer code
-        fourcc = OUTPUT_FORMATS[output_format]['fourcc']
-        writer = cv2.VideoWriter(
-            output_path,
-            cv2.VideoWriter_fourcc(*fourcc),
-            fps,
-            (width, height)
-        )
-        if not writer.isOpened():
-            raise RuntimeError(f"Failed to create video writer. {fourcc} codec not available.")
-        return writer
+    
+    # Try OpenCV VideoWriter first
+    fourcc = OUTPUT_FORMATS[output_format]['fourcc']
+    writer = cv2.VideoWriter(
+        output_path,
+        cv2.VideoWriter_fourcc(*fourcc),
+        fps,
+        (width, height)
+    )
+    
+    # If OpenCV writer fails, fall back to FFmpegWriter
+    if not writer.isOpened():
+        print(f"Warning: {fourcc} codec not available, falling back to FFmpeg")
+        return FFmpegWriter(output_path, width, height, fps)
+        
+    return writer
 
 def process_video(
     input_path: str,
     model_path: str = None,
     output_path: Optional[str] = None,
-    output_format: str = 'mjpeg',
-    debug: bool = False
+    output_format: str = 'h264',
+    debug: bool = False,
+    skip_audio: bool = False  # New parameter
 ) -> None:
-    """Process video with pose detection."""
+    """Process video with pose detection and audio syncing."""
     if debug:
         total_start = time.perf_counter()
         print("\nStarting video processing...")
         model_start = time.perf_counter()
     
-    model = load_yolo_model(model_path)  # Use shared model loading
+    model = load_yolo_model(model_path)
             
     if debug:
         model_time = time.perf_counter() - model_start
         print(f"Model loading time: {model_time:.2f}s")
         writer_start = time.perf_counter()
     
-    output_path = output_path or get_default_output_path(input_path, output_format)
-    writer = create_video_writer(input_path, output_path, output_format)
+    # Create temporary output path for video without audio
+    temp_output = output_path or get_default_output_path(input_path, output_format)
+    if not skip_audio and os.path.exists(input_path):
+        temp_output = temp_output.replace('.', '_temp.')
+    
+    writer = create_video_writer(input_path, temp_output, output_format)
     
     if debug:
         writer_init = time.perf_counter() - writer_start
@@ -396,7 +413,21 @@ def process_video(
                 frame_count += 1
     finally:
         writer.release()
-        
+
+    # Sync audio if input file exists and audio sync not skipped
+    final_output = output_path or get_default_output_path(input_path, output_format)
+    if not skip_audio and os.path.exists(input_path):
+        if debug:
+            print("\nSyncing audio...")
+        try:
+            sync_audio(input_path, temp_output, final_output)
+            os.remove(temp_output)  # Clean up temporary file
+        except Exception as e:
+            print(f"Warning: Audio sync failed: {str(e)}")
+            print("Keeping video without audio")
+            if temp_output != final_output:
+                os.rename(temp_output, final_output)
+    
     if debug:
         total_time = time.perf_counter() - total_start
         print("\nAdditional Timing Information:")
@@ -406,18 +437,19 @@ def process_video(
             print(f"Total I/O time: {io_time:.2f}s")
         print(f"Effective FPS (including all overhead): {frame_count/total_time:.1f}")
     
-    print(f"Processed video saved to: {output_path}")
+    print(f"Processed video saved to: {final_output}")
 
 def main():
     parser = argparse.ArgumentParser(description="Process video with pose detection")
     parser.add_argument("input", help="Input video file")
     parser.add_argument("--model", default="yolo11n-pose.pt", help="Path to YOLO model")
-    parser.add_argument("--output", help="Output video path (default: input_pose_detected.[avi/mp4/webm])")
+    parser.add_argument("--output", help="Output video path (default: input_pose_detected.mp4)")
     parser.add_argument("--output-format", 
                        choices=['mjpeg', 'h264', 'webm'],
-                       default='mjpeg',
-                       help="Output video format (default: mjpeg)")
+                       default='h264',
+                       help="Output video format (default: h264)")
     parser.add_argument("--debug", action="store_true", help="Output timing information")
+    parser.add_argument("--skip-audio", action="store_true", help="Skip audio syncing")
     
     args = parser.parse_args()
     
@@ -430,7 +462,8 @@ def main():
         model_path=args.model,
         output_path=args.output,
         output_format=args.output_format,
-        debug=args.debug
+        debug=args.debug,
+        skip_audio=args.skip_audio
     )
 
 if __name__ == "__main__":
