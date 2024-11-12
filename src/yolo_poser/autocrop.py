@@ -247,7 +247,7 @@ def crop_video(input_path, output_path, crop_params):
         cap.release()
         writer.release()
 
-def main(input_video=None, padding=0.3, keep_proportions=True, preview=True, debug=False):
+def main(input_video=None, padding=0.3, keep_proportions=True, preview=True, debug=False, output=None):
     """Main function with configurable options"""
     if input_video is None:
         # Set up argument parser
@@ -259,6 +259,7 @@ def main(input_video=None, padding=0.3, keep_proportions=True, preview=True, deb
         parser.add_argument('--no-preview', action='store_false', dest='preview',
                           help='Skip preview and confirmation')
         parser.add_argument('--debug', action='store_true', help='Save debug frames showing detections')
+        parser.add_argument('--output', help='Output video path (default: input_cropped.mp4)')
         
         args = parser.parse_args()
         
@@ -267,7 +268,8 @@ def main(input_video=None, padding=0.3, keep_proportions=True, preview=True, deb
             padding=args.padding,
             keep_proportions=args.keep_proportions,
             preview=args.preview,
-            debug=args.debug
+            debug=args.debug,
+            output=args.output
         )
     
     # Get bounding box and sample frames
@@ -307,9 +309,10 @@ def main(input_video=None, padding=0.3, keep_proportions=True, preview=True, deb
             return
     
     # Apply crop
-    output_video = f"{Path(input_video).stem}_cropped{Path(input_video).suffix}"
-    crop_video(input_video, output_video, crop_params)
-    print(f"Cropped video saved as: {output_video}")
+    if output is None:
+        output = f"{Path(input_video).stem}_cropped{Path(input_video).suffix}"
+    crop_video(input_video, output, crop_params)
+    print(f"Cropped video saved as: {output}")
 
 if __name__ == "__main__":
     main()
