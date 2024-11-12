@@ -96,10 +96,12 @@ class FFmpegTools:
 class FFmpegWriter:
     """FFmpeg-based video writer supporting multiple formats."""
     def __init__(self, output_path: str, width: int, height: int, fps: float):
+        if width % 2 != 0 or height % 2 != 0:
+            raise ValueError(f"Width and height must be even numbers. Got {width}x{height}")
+        
         if output_path.endswith('.webm'):
             command = [
                 'ffmpeg',
-                '-v', 'quiet',
                 '-y',
                 '-f', 'rawvideo',
                 '-vcodec', 'rawvideo',
@@ -116,10 +118,8 @@ class FFmpegWriter:
                 output_path
             ]
         else:
-            # Simpler settings with color correction
             command = [
                 'ffmpeg',
-                '-v', 'quiet',
                 '-y',
                 '-f', 'rawvideo',
                 '-vcodec', 'rawvideo',
@@ -128,13 +128,10 @@ class FFmpegWriter:
                 '-r', str(fps),
                 '-i', '-',
                 '-an',
-                '-c:v', 'libx264',
-                '-preset', 'medium',
-                '-profile:v', 'main',
+                '-c:v', 'libx264',  # Changed back to libx264
+                '-preset', 'fast',
                 '-pix_fmt', 'yuv420p',
-                '-crf', '23',  # Back to default CRF
-                '-vf', 'colorlevels=rimin=0:gimin=0:bimin=0:rimax=0.95:gimax=0.95:bimax=0.95',  # Adjust color levels
-                '-movflags', '+faststart',
+                '-crf', '23',
                 output_path
             ]
         
@@ -143,47 +140,42 @@ class FFmpegWriter:
                 command, 
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                bufsize=10**8
             )
         except subprocess.SubprocessError as e:
             raise RuntimeError(f"Failed to start FFmpeg: {str(e)}")
         
     def write(self, frame):
         """Write a frame to the video."""
+        if self.process is None:
+            raise RuntimeError("FFmpeg process is not initialized")
+            
         if self.process.poll() is not None:
-            # Process has terminated - get error output
-            _, stderr = self.process.communicate()
-            stderr_str = stderr.decode() if stderr else "No error output"
-            raise RuntimeError(f"FFmpeg process terminated unexpectedly\nFFmpeg error: {stderr_str}")
+            stderr = self.process.stderr.read().decode() if self.process.stderr else "No error output"
+            raise RuntimeError(f"FFmpeg process terminated unexpectedly\nFFmpeg error: {stderr}")
             
         try:
             self.process.stdin.write(frame.tobytes())
-            self.process.stdin.flush()  # Ensure the frame is written
         except (IOError, BrokenPipeError) as e:
-            # Get FFmpeg's error output
-            _, stderr = self.process.communicate()
-            stderr_str = stderr.decode() if stderr else "No error output"
-            raise RuntimeError(f"FFmpeg write failed: {str(e)}\nFFmpeg error: {stderr_str}")
+            stderr = self.process.stderr.read().decode() if self.process.stderr else "No error output"
+            self.process.terminate()
+            raise RuntimeError(f"FFmpeg write failed: {str(e)}\nFFmpeg error: {stderr}")
         
     def release(self):
         """Close the video writer."""
         if self.process:
             try:
                 self.process.stdin.close()
-                # Wait with timeout and capture any errors
-                try:
-                    self.process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
-                    raise RuntimeError("FFmpeg process did not terminate in time")
+                self.process.wait(timeout=10)  # Increased timeout
                 
                 if self.process.returncode != 0:
-                    _, stderr = self.process.communicate()
-                    stderr_str = stderr.decode() if stderr else "No error output"
-                    raise RuntimeError(f"FFmpeg failed with code {self.process.returncode}: {stderr_str}")
+                    stderr = self.process.stderr.read().decode() if self.process.stderr else "No error output"
+                    raise RuntimeError(f"FFmpeg failed with code {self.process.returncode}: {stderr}")
+                    
             except Exception as e:
-                # Make sure process is killed in case of any error
-                self.process.kill()
+                if self.process:
+                    self.process.kill()
                 raise RuntimeError(f"Error releasing FFmpeg writer: {str(e)}")
             finally:
                 self.process = None

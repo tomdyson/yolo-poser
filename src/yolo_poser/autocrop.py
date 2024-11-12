@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from ultralytics import YOLO
 
-from .utils import FFmpegWriter, get_device, load_yolo_model
+from yolo_poser.utils import FFmpegWriter, get_device, load_yolo_model
 
 
 def calculate_crop_params(video_path, bbox, padding=0.1, keep_proportions=True):
@@ -243,15 +243,21 @@ def crop_video(input_path, output_path, crop_params):
     """Apply the crop using ffmpeg"""
     x, y, w, h = crop_params
     
+    # Ensure width and height are even numbers
+    w = w - (w % 2)
+    h = h - (h % 2)
+    
     # Get input video FPS and total frames
     cap = cv2.VideoCapture(input_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
     # Create writer with cropped dimensions and correct FPS
-    writer = FFmpegWriter(output_path, w, h, fps)
-    
+    writer = None
     try:
+        print(f"\nInitializing video writer ({w}x{h} @ {fps}fps)...")
+        writer = FFmpegWriter(output_path, w, h, fps)
+        
         frame_count = 0
         while True:
             ret, frame = cap.read()
@@ -259,17 +265,39 @@ def crop_video(input_path, output_path, crop_params):
                 break
             
             frame_count += 1
-            if frame_count % 100 == 0:  # Status update every 100 frames
+            if frame_count % 100 == 0:
                 progress = (frame_count / total_frames) * 100
-                print(f"\rCropping: {progress:.1f}% complete", end="")
+                print(f"\rCropping: {progress:.1f}% complete ({frame_count}/{total_frames} frames)", end="")
+            
+            # Ensure crop dimensions are within frame bounds
+            crop_h = min(h, frame.shape[0] - y)
+            crop_w = min(w, frame.shape[1] - x)
+            
+            if crop_h <= 0 or crop_w <= 0:
+                raise ValueError(f"Invalid crop dimensions at frame {frame_count}")
+            
+            try:
+                cropped_frame = frame[y:y+crop_h, x:x+crop_w]
+                # Ensure the cropped frame matches the writer's dimensions
+                if cropped_frame.shape[:2] != (h, w):
+                    cropped_frame = cv2.resize(cropped_frame, (w, h))
+                writer.write(cropped_frame)
+            except Exception as e:
+                print(f"\nError at frame {frame_count}/{total_frames}: {str(e)}")
+                raise
                 
-            # Crop the frame before writing
-            cropped_frame = frame[y:y+h, x:x+w]
-            writer.write(cropped_frame)
+    except Exception as e:
+        print(f"\nError during video cropping: {str(e)}")
+        raise
+    
     finally:
-        print("\nCropping complete!")
+        print("\nCleaning up resources...")
         cap.release()
-        writer.release()
+        if writer:
+            try:
+                writer.release()
+            except Exception as e:
+                print(f"Error during writer cleanup: {str(e)}")
 
 def main(input_video=None, padding=0.3, keep_proportions=True, preview=True, debug=False, output=None):
     """Main function with configurable options"""
