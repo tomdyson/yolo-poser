@@ -81,8 +81,11 @@ def extract_frames(video_path, num_frames):
 
 def get_combined_bbox(video_path, num_samples=30, outlier_threshold=1.5, debug=False):
     """Get bounding box that encompasses all detected people, excluding outliers"""
-    model = load_yolo_model()
+    if debug:
+        print("\nStarting person detection and bbox calculation...")
+        print(f"Processing {num_samples} frames from video...")
     
+    model = load_yolo_model()
     frames = extract_frames(video_path, num_samples)
     
     # Store all coordinates separately for statistical analysis
@@ -91,11 +94,15 @@ def get_combined_bbox(video_path, num_samples=30, outlier_threshold=1.5, debug=F
     debug_frames = []
     
     if debug:
+        print("\nAnalyzing frames for person detection...")
         debug_dir = Path("debug_frames")
         debug_dir.mkdir(exist_ok=True)
     
     # First pass: collect all coordinates
-    for frame_idx, frame in frames:
+    for i, (frame_idx, frame) in enumerate(frames):
+        if debug and i % 5 == 0:  # Status update every 5 frames
+            print(f"Processing frame {i+1}/{len(frames)}...")
+            
         results = model.predict(frame, classes=0)
         
         if len(results[0].boxes) == 1:
@@ -105,6 +112,10 @@ def get_combined_bbox(video_path, num_samples=30, outlier_threshold=1.5, debug=F
             xs_max.append(box[2])
             ys_max.append(box[3])
             valid_frames.append((frame_idx, frame, box))
+    
+    if debug:
+        print(f"\nFound {len(valid_frames)} frames with single person detection")
+        print("\nRemoving outliers...")
     
     # Calculate IQR and bounds for each coordinate
     def remove_outliers(data):
@@ -132,6 +143,8 @@ def get_combined_bbox(video_path, num_samples=30, outlier_threshold=1.5, debug=F
     
     # Calculate final bounding box from filtered frames
     if filtered_frames:
+        if debug:
+            print(f"Calculating final bbox from {len(filtered_frames)} filtered frames...")
         min_x = np.median([box[0] for _, _, box in filtered_frames])
         min_y = np.median([box[1] for _, _, box in filtered_frames])
         max_x = np.median([box[2] for _, _, box in filtered_frames])
@@ -140,6 +153,7 @@ def get_combined_bbox(video_path, num_samples=30, outlier_threshold=1.5, debug=F
         raise ValueError("No valid frames after filtering outliers")
     
     if debug:
+        print("\nGenerating debug visualizations...")
         for frame_idx, frame in frames:
             debug_frame = frame.copy()
             results = model.predict(frame, classes=0)
@@ -199,7 +213,8 @@ def get_combined_bbox(video_path, num_samples=30, outlier_threshold=1.5, debug=F
         
         cv2.imwrite(str(debug_dir / "summary.jpg"), summary_frame)
         
-        print(f"\nDebug frames saved to: {debug_dir}/")
+        print(f"\nFinal bbox dimensions: {int(max_x-min_x)}x{int(max_y-min_y)}")
+        print(f"Debug frames saved to: {debug_dir}/")
         print(f"Valid frames after outlier removal: {len(filtered_frames)}/{len(valid_frames)}")
     
     return (min_x, min_y, max_x, max_y), filtered_frames
@@ -228,23 +243,31 @@ def crop_video(input_path, output_path, crop_params):
     """Apply the crop using ffmpeg"""
     x, y, w, h = crop_params
     
-    # Get input video FPS
+    # Get input video FPS and total frames
     cap = cv2.VideoCapture(input_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
     # Create writer with cropped dimensions and correct FPS
     writer = FFmpegWriter(output_path, w, h, fps)
     
     try:
+        frame_count = 0
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
+            
+            frame_count += 1
+            if frame_count % 100 == 0:  # Status update every 100 frames
+                progress = (frame_count / total_frames) * 100
+                print(f"\rCropping: {progress:.1f}% complete", end="")
                 
             # Crop the frame before writing
             cropped_frame = frame[y:y+h, x:x+w]
             writer.write(cropped_frame)
     finally:
+        print("\nCropping complete!")
         cap.release()
         writer.release()
 
