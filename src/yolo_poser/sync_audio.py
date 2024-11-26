@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import subprocess
 
 from .utils import FFmpegTools
@@ -18,7 +19,9 @@ def sync_audio(source_video, destination_video, output_path=None):
     dest_duration = FFmpegTools.get_video_duration(destination_video)
 
     # Extract audio from source
-    temp_audio = 'temp_audio.aac'
+    temp_audio = source_video + '.temp_audio.aac'
+    if os.path.exists(temp_audio):
+        os.remove(temp_audio)
     extract_cmd = [
         'ffmpeg',
         '-v', 'quiet',
