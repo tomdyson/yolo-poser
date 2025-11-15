@@ -1,6 +1,6 @@
 """YOLO-based human pose detection and visualization tool."""
 
-__version__ = "0.1.17"
+__version__ = "0.1.18"
 
 from .autocrop import calculate_crop_params, crop_video
 from .pose_detect import process_video, process_video_frames
